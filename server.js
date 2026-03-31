@@ -13,14 +13,20 @@ app.use(express.static(path.join(__dirname)));
 //  ТОХИРГОО
 // ═══════════════════════════════════════════════════
 const CONFIG = {
-  // QPay merchant герээ байгуулсны дараа дараах 3 мөрийг бөглөнө:
+  // QPay — герээ байгуулсны дараа:
   // QPAY_USERNAME:     'таны_username',
   // QPAY_PASSWORD:     'таны_password',
   // QPAY_INVOICE_CODE: 'таны_invoice_code',
-  QPAY_ENABLED:   false,           // QPay идэвхжүүлэх: false → true болгоно
+  QPAY_ENABLED: false,
 
-  ADMIN_PASSWORD: 'aravt2024',     // Admin нууц үг — өөрчилж болно
-  PORT:           3000,
+  TWILIO_SID:     process.env.TWILIO_SID,
+  TWILIO_TOKEN:   process.env.TWILIO_TOKEN,
+  TWILIO_FROM:    process.env.TWILIO_FROM,
+  TWILIO_ENABLED: process.env.TWILIO_ENABLED === 'true',
+  ADMIN_PHONE: '+97688205808',       // ← Таны утасны дугаар (SMS хүлээн авна)
+
+  ADMIN_PASSWORD: 'aravt2024',
+  PORT:           process.env.PORT || 3000,
   DATA_FILE:      path.join(__dirname, 'data', 'registrations.json'),
 };
 
@@ -56,11 +62,32 @@ function adminAuth(req, res, next) {
   next();
 }
 
+// ── Дуусах огноо тооцоо ──
+function calcEndDate(startDate, days) {
+  const d = new Date(startDate);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+// ── SMS илгээх ──
+async function sendSMS(to, message) {
+  if (!CONFIG.TWILIO_ENABLED) {
+    console.log(`[SMS] → ${to}: ${message}`);
+    return;
+  }
+  try {
+    const twilio = require('twilio')(CONFIG.TWILIO_SID, CONFIG.TWILIO_TOKEN);
+    await twilio.messages.create({ from: CONFIG.TWILIO_FROM, to, body: message });
+    console.log(`SMS илгээгдлээ → ${to}`);
+  } catch (e) {
+    console.error('SMS алдаа:', e.message);
+  }
+}
+
 // ═══════════════════════════════════════════════════
-//  БҮРТГЭЛ — бүртгэл хадгалж, банк шилжүүлгийн
-//  мэдээлэл буцаана (QPay-гүй горим)
+//  БҮРТГЭЛ
 // ═══════════════════════════════════════════════════
-app.post('/api/register', (req, res) => {
+app.post('/api/register', async (req, res) => {
   try {
     const { name, age, phone, duration, startDate, gender } = req.body;
     if (!name || !age || !phone || !duration || !startDate)
@@ -69,14 +96,18 @@ app.post('/api/register', (req, res) => {
     const plan = PRICE_MAP[duration];
     if (!plan) return res.status(400).json({ error: 'Буруу хугацаа' });
 
+    const endDate = calcEndDate(startDate, plan.days);
+
     const reg = {
       id:        uuidv4(),
-      name, age, phone, gender: gender || '',
+      name, age, phone,
+      gender:    gender || '',
       duration,
       planLabel: plan.label,
       amount:    plan.price,
       days:      plan.days,
       startDate,
+      endDate,
       status:    'pending',
       payMethod: 'bank',
       createdAt: new Date().toISOString(),
@@ -87,12 +118,19 @@ app.post('/api/register', (req, res) => {
     data.push(reg);
     saveData(data);
 
+    // Admin-д SMS мэдэгдэл
+    const genderTxt = gender === 'М' ? 'Эр' : gender === 'Э' ? 'Эм' : '';
+    await sendSMS(
+      CONFIG.ADMIN_PHONE,
+      `🏋 Аравт шинэ бүртгэл!\n👤 ${name} (${age}нас, ${genderTxt})\n📱 ${phone}\n💰 ${plan.label} - ${plan.price.toLocaleString()}₮\n📅 ${startDate} → ${endDate}`
+    );
+
     res.json({
       success:        true,
       registrationId: reg.id,
       amount:         plan.price,
       planLabel:      plan.label,
-      name:           name,
+      endDate,
       qpayEnabled:    CONFIG.QPAY_ENABLED,
     });
 
@@ -102,31 +140,20 @@ app.post('/api/register', (req, res) => {
   }
 });
 
-// ── QPay төлбөр шалгах (QPay идэвхтэй үед ашиглана) ──
-app.get('/api/qpay/check/:invoiceId', (_req, res) => {
-  res.json({ paid: false });
-});
-
-// ── QPay callback ──
+// ── QPay ──
+app.get('/api/qpay/check/:invoiceId', (_req, res) => res.json({ paid: false }));
 app.post('/api/qpay/callback', (req, res) => {
   try {
     const { payment_id, invoice_id } = req.body;
     const data = loadData();
     const reg = data.find(r => r.invoiceId === invoice_id);
-    if (reg) {
-      reg.status    = 'paid';
-      reg.paidAt    = new Date().toISOString();
-      reg.paymentId = payment_id;
-      saveData(data);
-    }
+    if (reg) { reg.status = 'paid'; reg.paidAt = new Date().toISOString(); reg.paymentId = payment_id; saveData(data); }
     res.json({ status: 'received' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ═══════════════════════════════════════════════════
-//  ADMIN ENDPOINTS
+//  ADMIN
 // ═══════════════════════════════════════════════════
 app.post('/api/admin/login', (req, res) => {
   if (req.body.password === CONFIG.ADMIN_PASSWORD)
@@ -156,20 +183,28 @@ app.delete('/api/admin/registrations/:id', adminAuth, (req, res) => {
 
 app.get('/api/admin/stats', adminAuth, (_req, res) => {
   const data    = loadData();
+  const today   = new Date().toISOString().slice(0, 10);
   const paid    = data.filter(r => r.status === 'paid');
   const pending = data.filter(r => r.status === 'pending');
+  const expiring = paid.filter(r => {
+    if (!r.endDate) return false;
+    const diff = (new Date(r.endDate) - new Date(today)) / 86400000;
+    return diff >= 0 && diff <= 3;
+  });
+  const expired = paid.filter(r => r.endDate && r.endDate < today);
   res.json({
-    total:   data.length,
-    paid:    paid.length,
-    pending: pending.length,
-    revenue: paid.reduce((s, r) => s + (r.amount || 0), 0),
+    total:    data.length,
+    paid:     paid.length,
+    pending:  pending.length,
+    expiring: expiring.length,
+    expired:  expired.length,
+    revenue:  paid.reduce((s, r) => s + (r.amount || 0), 0),
   });
 });
 
 // ═══════════════════════════════════════════════════
 app.listen(CONFIG.PORT, '0.0.0.0', () => {
   console.log(`\n✅  Аравт Фитнесс сервер ажиллаж байна`);
-  console.log(`    Вэбсайт: http://192.168.1.12:${CONFIG.PORT}`);
-  console.log(`    Admin:   http://192.168.1.12:${CONFIG.PORT}/admin.html`);
-  console.log(`\n    [QPay одоогоор идэвхгүй — герээ байгуулсны дараа тохируулна]\n`);
+  console.log(`    http://192.168.1.12:${CONFIG.PORT}`);
+  console.log(`    Admin: http://192.168.1.12:${CONFIG.PORT}/admin.html\n`);
 });
