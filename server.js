@@ -19,11 +19,8 @@ const CONFIG = {
   // QPAY_INVOICE_CODE: 'таны_invoice_code',
   QPAY_ENABLED: false,
 
-  TWILIO_SID:     process.env.TWILIO_SID,
-  TWILIO_TOKEN:   process.env.TWILIO_TOKEN,
-  TWILIO_FROM:    process.env.TWILIO_FROM,
-  TWILIO_ENABLED: process.env.TWILIO_ENABLED === 'true',
-  ADMIN_PHONE: '+97688205808',       // ← Таны утасны дугаар (SMS хүлээн авна)
+  TWILIO_ENABLED: false,
+  ADMIN_PHONE: '+97688205808',
 
   ADMIN_PASSWORD: 'aravt2024',
   PORT:           process.env.PORT || 3000,
