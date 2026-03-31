@@ -15,10 +15,6 @@ app.use(express.static(path.join(__dirname)));
 const CONFIG = {
   QPAY_ENABLED: false,
 
-  TWILIO_SID:     process.env.TWILIO_SID,
-  TWILIO_TOKEN:   process.env.TWILIO_TOKEN,
-  TWILIO_FROM:    process.env.TWILIO_FROM,
-  TWILIO_ENABLED: process.env.TWILIO_ENABLED === 'true',
   ADMIN_PHONE: '+97688205808',
 
   ADMIN_PASSWORD: 'aravt2024',
@@ -63,20 +59,6 @@ function calcEndDate(startDate, days) {
   return d.toISOString().slice(0, 10);
 }
 
-// ── SMS илгээх ──
-async function sendSMS(to, message) {
-  if (!CONFIG.TWILIO_ENABLED) {
-    console.log(`[SMS] → ${to}: ${message}`);
-    return;
-  }
-  try {
-    const twilio = require('twilio')(CONFIG.TWILIO_SID, CONFIG.TWILIO_TOKEN);
-    await twilio.messages.create({ from: CONFIG.TWILIO_FROM, to, body: message });
-    console.log(`SMS илгээгдлээ → ${to}`);
-  } catch (e) {
-    console.error('SMS алдаа:', e.message);
-  }
-}
 
 // ═══════════════════════════════════════════════════
 //  БҮРТГЭЛ
@@ -109,11 +91,6 @@ app.post('/api/register', async (req, res) => {
     };
 
     await col().insertOne(reg);
-
-    await sendSMS(
-      CONFIG.ADMIN_PHONE,
-      `Аравт Fitness-д бүртгүүлсэнд баярлалаа.\nТаний эрх дуусах хугацаа: ${endDate}`
-    );
 
     res.json({
       success:        true,
