@@ -110,10 +110,9 @@ app.post('/api/register', async (req, res) => {
 
     await col().insertOne(reg);
 
-    const genderTxt = gender === 'М' ? 'Эр' : gender === 'Э' ? 'Эм' : '';
     await sendSMS(
       CONFIG.ADMIN_PHONE,
-      `🏋 Аравт шинэ бүртгэл!\n👤 ${name} (${age}нас, ${genderTxt})\n📱 ${phone}\n💰 ${plan.label} - ${plan.price.toLocaleString()}₮\n📅 ${startDate} → ${endDate}`
+      `Аравт Fitness-д бүртгүүлсэнд баярлалаа.\nТаний эрх дуусах хугацаа: ${endDate}`
     );
 
     res.json({
