@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="mn">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Аравт — Admin</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#080808;color:#f0ede6;font-family:'Segoe UI',sans-serif;min-height:100vh;}
+:root{--gold:#f5c800;--dark:#111;--card:#141414;--border:#1e1e1e;--muted:#666;--green:#22c55e;--orange:#f97316;}
+
+/* LOGIN */
+#loginScreen{display:flex;align-items:center;justify-content:center;min-height:100vh;}
+.login-box{background:var(--card);border:1px solid var(--border);padding:2.5rem;width:340px;}
+.login-box h2{font-size:1.4rem;letter-spacing:3px;color:var(--gold);margin-bottom:.3rem;}
+.login-box p{font-size:.75rem;color:var(--muted);margin-bottom:2rem;letter-spacing:1px;}
+.login-box input{width:100%;background:#0a0a0a;border:1px solid var(--border);color:#f0ede6;padding:.75rem 1rem;font-size:.9rem;margin-bottom:1rem;outline:none;}
+.login-box input:focus{border-color:var(--gold);}
+.login-box button{width:100%;background:var(--gold);color:#000;border:none;padding:.8rem;font-weight:700;font-size:.85rem;letter-spacing:2px;cursor:pointer;}
+.login-box button:hover{background:#ff6b00;color:#fff;}
+.err{color:#ef4444;font-size:.8rem;margin-top:.5rem;display:none;}
+
+/* DASHBOARD */
+#dashboard{display:none;}
+header{background:var(--card);border-bottom:1px solid var(--border);padding:1rem 2rem;display:flex;align-items:center;justify-content:space-between;}
+header h1{font-size:1.2rem;letter-spacing:3px;color:var(--gold);}
+header span{font-size:.75rem;color:var(--muted);}
+.logout-btn{background:none;border:1px solid var(--border);color:var(--muted);padding:.4rem .9rem;font-size:.75rem;cursor:pointer;letter-spacing:1px;}
+.logout-btn:hover{border-color:var(--gold);color:var(--gold);}
+
+/* STATS */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;padding:1.5rem 2rem;}
+.stat{background:var(--card);border:1px solid var(--border);padding:1.2rem 1.5rem;}
+.stat .val{font-size:2rem;font-weight:700;color:var(--gold);}
+.stat .lbl{font-size:.7rem;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-top:.2rem;}
+.stat.green .val{color:var(--green);}
+.stat.orange .val{color:var(--orange);}
+
+/* TOOLBAR */
+.toolbar{padding:0 2rem 1rem;display:flex;gap:.8rem;align-items:center;flex-wrap:wrap;}
+.toolbar input{background:#0a0a0a;border:1px solid var(--border);color:#f0ede6;padding:.5rem .9rem;font-size:.8rem;outline:none;width:220px;}
+.toolbar input:focus{border-color:var(--gold);}
+.filter-btn{background:none;border:1px solid var(--border);color:var(--muted);padding:.45rem .9rem;font-size:.75rem;cursor:pointer;letter-spacing:1px;}
+.filter-btn.active{border-color:var(--gold);color:var(--gold);}
+.export-btn{margin-left:auto;background:rgba(245,200,0,.1);border:1px solid rgba(245,200,0,.3);color:var(--gold);padding:.45rem 1rem;font-size:.75rem;cursor:pointer;letter-spacing:1px;}
+.export-btn:hover{background:rgba(245,200,0,.2);}
+
+/* TABLE */
+.table-wrap{padding:0 2rem 2rem;overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:.82rem;}
+th{background:#0d0d0d;color:var(--muted);font-weight:600;letter-spacing:1px;text-transform:uppercase;padding:.75rem 1rem;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;}
+td{padding:.75rem 1rem;border-bottom:1px solid #161616;vertical-align:middle;}
+tr:hover td{background:rgba(255,255,255,.02);}
+.badge{display:inline-block;padding:.2rem .6rem;font-size:.7rem;letter-spacing:1px;font-weight:600;}
+.badge.paid{background:rgba(34,197,94,.15);color:var(--green);border:1px solid rgba(34,197,94,.3);}
+.badge.pending{background:rgba(249,115,22,.15);color:var(--orange);border:1px solid rgba(249,115,22,.3);}
+.amount{font-weight:700;color:var(--gold);}
+.action-btn{background:none;border:1px solid var(--border);color:var(--muted);padding:.3rem .65rem;font-size:.72rem;cursor:pointer;margin-right:.3rem;}
+.action-btn.pay{border-color:rgba(34,197,94,.4);color:var(--green);}
+.action-btn.pay:hover{background:rgba(34,197,94,.1);}
+.action-btn.del{border-color:rgba(239,68,68,.3);color:#ef4444;}
+.action-btn.del:hover{background:rgba(239,68,68,.1);}
+.empty{text-align:center;padding:3rem;color:var(--muted);font-size:.85rem;}
+.reg-photo{width:38px;height:38px;border-radius:50%;object-fit:cover;border:1px solid var(--gold);}
+.no-photo{width:38px;height:38px;border-radius:50%;background:var(--border);display:inline-flex;align-items:center;justify-content:center;font-size:1.1rem;}
+@media(max-width:700px){
+  .stats{grid-template-columns:1fr 1fr;}
+  .toolbar{flex-direction:column;align-items:stretch;}
+  .toolbar input{width:100%;}
+  .export-btn{margin-left:0;}
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-box">
+    <h2>АРАВТ ADMIN</h2>
+    <p>Нэвтрэх нууц үгээ оруулна уу</p>
+    <input type="password" id="pwInput" placeholder="Нууц үг" onkeydown="if(event.key==='Enter')doLogin()"/>
+    <button onclick="doLogin()">НЭВТРЭХ →</button>
+    <div class="err" id="loginErr">Нууц үг буруу байна</div>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard">
+  <header>
+    <h1>АРАВТ ADMIN</h1>
+    <div style="display:flex;align-items:center;gap:1rem;">
+      <span id="lastRefresh"></span>
+      <button class="logout-btn" onclick="logout()">ГАРАХ</button>
+    </div>
+  </header>
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat"><div class="val" id="sTot">—</div><div class="lbl">Нийт бүртгэл</div></div>
+    <div class="stat green"><div class="val" id="sPaid">—</div><div class="lbl">Төлсөн</div></div>
+    <div class="stat orange"><div class="val" id="sPend">—</div><div class="lbl">Хүлээгдэж буй</div></div>
+    <div class="stat"><div class="val" id="sRev">—</div><div class="lbl">Нийт орлого (₮)</div></div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <input type="text" id="searchInput" placeholder="Нэр, утас хайх..." oninput="renderTable()"/>
+    <button class="filter-btn active" onclick="setFilter('all',this)">Бүгд</button>
+    <button class="filter-btn" onclick="setFilter('paid',this)">Төлсөн</button>
+    <button class="filter-btn" onclick="setFilter('pending',this)">Хүлээгдэж буй</button>
+    <button class="export-btn" onclick="exportCSV()">⬇ CSV татах</button>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Хүйс</th>
+          <th>Нэр</th>
+          <th>Нас</th>
+          <th>Утас</th>
+          <th>Багц</th>
+          <th>Дүн</th>
+          <th>Эхлэх өдөр</th>
+          <th>Бүртгэсэн</th>
+          <th>Төлсөн</th>
+          <th>Статус</th>
+          <th>Үйлдэл</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+let token = localStorage.getItem('adminToken');
+let allRegs = [];
+let currentFilter = 'all';
+
+if (token) showDashboard();
+
+function doLogin() {
+  const pw = document.getElementById('pwInput').value;
+  fetch('/api/admin/login', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ password: pw })
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) {
+      token = d.token;
+      localStorage.setItem('adminToken', token);
+      showDashboard();
+    } else {
+      document.getElementById('loginErr').style.display = 'block';
+    }
+  });
+}
+
+function logout() {
+  localStorage.removeItem('adminToken');
+  token = null;
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+}
+
+function showDashboard() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  loadData();
+  setInterval(loadData, 15000); // 15 секунд тутам шинэчлэх
+}
+
+function authHeaders() {
+  return { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` };
+}
+
+async function loadData() {
+  try {
+    const [regsResp, statsResp] = await Promise.all([
+      fetch('/api/admin/registrations', { headers: authHeaders() }),
+      fetch('/api/admin/stats', { headers: authHeaders() })
+    ]);
+    if (regsResp.status === 401) { logout(); return; }
+    allRegs = await regsResp.json();
+    const stats = await statsResp.json();
+
+    document.getElementById('sTot').textContent  = stats.total;
+    document.getElementById('sPaid').textContent = stats.paid;
+    document.getElementById('sPend').textContent = stats.pending;
+    document.getElementById('sRev').textContent  = stats.revenue.toLocaleString();
+    document.getElementById('lastRefresh').textContent = 'Шинэчлэлт: ' + new Date().toLocaleTimeString('mn-MN');
+    renderTable();
+  } catch(e) { console.error(e); }
+}
+
+function setFilter(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTable();
+}
+
+function renderTable() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  let rows = allRegs.filter(r => {
+    if (currentFilter !== 'all' && r.status !== currentFilter) return false;
+    if (q && !r.name?.toLowerCase().includes(q) && !r.phone?.includes(q)) return false;
+    return true;
+  });
+
+  const tbody = document.getElementById('tableBody');
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="11" class="empty">Бүртгэл олдсонгүй</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = rows.map((r, i) => `
+    <tr>
+      <td style="color:var(--muted)">${i+1}</td>
+      <td style="font-size:1.1rem">${r.gender === 'М' ? '♂' : r.gender === 'Э' ? '♀' : '—'}</td>
+      <td style="font-weight:600">${esc(r.name)}</td>
+      <td>${r.age}</td>
+      <td>${esc(r.phone)}</td>
+      <td style="font-size:.75rem;color:#ccc">${esc(r.planLabel)}</td>
+      <td class="amount">${(r.amount||0).toLocaleString()}₮</td>
+      <td style="font-size:.75rem">${r.startDate || '—'}</td>
+      <td style="font-size:.72rem;color:var(--muted)">${fmtDate(r.createdAt)}</td>
+      <td style="font-size:.72rem;color:var(--green)">${r.paidAt ? fmtDate(r.paidAt) : '—'}</td>
+      <td><span class="badge ${r.status}">${r.status === 'paid' ? '✓ Төлсөн' : '⏳ Хүлээгдэж буй'}</span></td>
+      <td>
+        ${r.status !== 'paid' ? `<button class="action-btn pay" onclick="markPaid('${r.id}')">✓ Төлсөн</button>` : ''}
+        <button class="action-btn del" onclick="deleteReg('${r.id}')">🗑</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function markPaid(id) {
+  if (!confirm('Төлсөн гэж тэмдэглэх үү?')) return;
+  await fetch(`/api/admin/registrations/${id}`, {
+    method:'PATCH', headers: authHeaders(),
+    body: JSON.stringify({ status: 'paid' })
+  });
+  loadData();
+}
+
+async function deleteReg(id) {
+  if (!confirm('Энэ бүртгэлийг устгах уу?')) return;
+  await fetch(`/api/admin/registrations/${id}`, {
+    method:'DELETE', headers: authHeaders()
+  });
+  loadData();
+}
+
+function exportCSV() {
+  const headers = ['Нэр','Нас','Утас','Багц','Дүн','Эхлэх өдөр','Бүртгэсэн','Төлсөн','Статус'];
+  const rows = allRegs.map(r => [
+    r.name, r.age, r.phone, r.planLabel, r.amount,
+    r.startDate, fmtDate(r.createdAt), r.paidAt ? fmtDate(r.paidAt) : '',
+    r.status === 'paid' ? 'Төлсөн' : 'Хүлээгдэж буй'
+  ]);
+  const csv = [headers, ...rows].map(r => r.map(v => `"${v||''}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent('\uFEFF' + csv);
+  a.download = `aravt-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('mn-MN') + ' ' + d.toLocaleTimeString('mn-MN', {hour:'2-digit',minute:'2-digit'});
+}
+
+function esc(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>
