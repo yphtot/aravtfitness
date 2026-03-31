@@ -63,6 +63,11 @@ tr:hover td{background:rgba(255,255,255,.02);}
 .empty{text-align:center;padding:3rem;color:var(--muted);font-size:.85rem;}
 .reg-photo{width:38px;height:38px;border-radius:50%;object-fit:cover;border:1px solid var(--gold);}
 .no-photo{width:38px;height:38px;border-radius:50%;background:var(--border);display:inline-flex;align-items:center;justify-content:center;font-size:1.1rem;}
+tr.row-expired td{background:rgba(239,68,68,.07);}
+tr.row-expiring td{background:rgba(249,115,22,.07);}
+.enddate-expired{color:#ef4444;font-weight:600;}
+.enddate-expiring{color:var(--orange);font-weight:600;}
+.enddate-ok{color:var(--green);}
 @media(max-width:700px){
   .stats{grid-template-columns:1fr 1fr;}
   .toolbar{flex-direction:column;align-items:stretch;}
@@ -95,10 +100,12 @@ tr:hover td{background:rgba(255,255,255,.02);}
   </header>
 
   <!-- Stats -->
-  <div class="stats">
+  <div class="stats" style="grid-template-columns:repeat(6,1fr);">
     <div class="stat"><div class="val" id="sTot">—</div><div class="lbl">Нийт бүртгэл</div></div>
     <div class="stat green"><div class="val" id="sPaid">—</div><div class="lbl">Төлсөн</div></div>
     <div class="stat orange"><div class="val" id="sPend">—</div><div class="lbl">Хүлээгдэж буй</div></div>
+    <div class="stat orange"><div class="val" id="sExp">—</div><div class="lbl">3 хоногт дуусна</div></div>
+    <div class="stat" style="--val-color:#ef4444"><div class="val" id="sExpired" style="color:#ef4444">—</div><div class="lbl">Дууссан</div></div>
     <div class="stat"><div class="val" id="sRev">—</div><div class="lbl">Нийт орлого (₮)</div></div>
   </div>
 
@@ -124,6 +131,7 @@ tr:hover td{background:rgba(255,255,255,.02);}
           <th>Багц</th>
           <th>Дүн</th>
           <th>Эхлэх өдөр</th>
+          <th>Дуусах өдөр</th>
           <th>Бүртгэсэн</th>
           <th>Төлсөн</th>
           <th>Статус</th>
@@ -188,10 +196,12 @@ async function loadData() {
     allRegs = await regsResp.json();
     const stats = await statsResp.json();
 
-    document.getElementById('sTot').textContent  = stats.total;
-    document.getElementById('sPaid').textContent = stats.paid;
-    document.getElementById('sPend').textContent = stats.pending;
-    document.getElementById('sRev').textContent  = stats.revenue.toLocaleString();
+    document.getElementById('sTot').textContent     = stats.total;
+    document.getElementById('sPaid').textContent    = stats.paid;
+    document.getElementById('sPend').textContent    = stats.pending;
+    document.getElementById('sExp').textContent     = stats.expiring;
+    document.getElementById('sExpired').textContent = stats.expired;
+    document.getElementById('sRev').textContent     = stats.revenue.toLocaleString();
     document.getElementById('lastRefresh').textContent = 'Шинэчлэлт: ' + new Date().toLocaleTimeString('mn-MN');
     renderTable();
   } catch(e) { console.error(e); }
@@ -214,12 +224,23 @@ function renderTable() {
 
   const tbody = document.getElementById('tableBody');
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="11" class="empty">Бүртгэл олдсонгүй</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="13" class="empty">Бүртгэл олдсонгүй</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = rows.map((r, i) => `
-    <tr>
+  const today = new Date().toISOString().slice(0, 10);
+  tbody.innerHTML = rows.map((r, i) => {
+    let rowClass = '';
+    let endClass = '';
+    let endLabel = r.endDate || '—';
+    if (r.status === 'paid' && r.endDate) {
+      const diff = (new Date(r.endDate) - new Date(today)) / 86400000;
+      if (diff < 0)       { rowClass = 'row-expired';   endClass = 'enddate-expired'; }
+      else if (diff <= 3) { rowClass = 'row-expiring';  endClass = 'enddate-expiring'; }
+      else                {                              endClass = 'enddate-ok'; }
+    }
+    return `
+    <tr class="${rowClass}">
       <td style="color:var(--muted)">${i+1}</td>
       <td style="font-size:1.1rem">${r.gender === 'М' ? '♂' : r.gender === 'Э' ? '♀' : '—'}</td>
       <td style="font-weight:600">${esc(r.name)}</td>
@@ -228,6 +249,7 @@ function renderTable() {
       <td style="font-size:.75rem;color:#ccc">${esc(r.planLabel)}</td>
       <td class="amount">${(r.amount||0).toLocaleString()}₮</td>
       <td style="font-size:.75rem">${r.startDate || '—'}</td>
+      <td style="font-size:.75rem" class="${endClass}">${endLabel}</td>
       <td style="font-size:.72rem;color:var(--muted)">${fmtDate(r.createdAt)}</td>
       <td style="font-size:.72rem;color:var(--green)">${r.paidAt ? fmtDate(r.paidAt) : '—'}</td>
       <td><span class="badge ${r.status}">${r.status === 'paid' ? '✓ Төлсөн' : '⏳ Хүлээгдэж буй'}</span></td>
@@ -235,8 +257,8 @@ function renderTable() {
         ${r.status !== 'paid' ? `<button class="action-btn pay" onclick="markPaid('${r.id}')">✓ Төлсөн</button>` : ''}
         <button class="action-btn del" onclick="deleteReg('${r.id}')">🗑</button>
       </td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
 }
 
 async function markPaid(id) {
@@ -257,10 +279,11 @@ async function deleteReg(id) {
 }
 
 function exportCSV() {
-  const headers = ['Нэр','Нас','Утас','Багц','Дүн','Эхлэх өдөр','Бүртгэсэн','Төлсөн','Статус'];
+  const headers = ['Нэр','Нас','Утас','Багц','Дүн','Эхлэх өдөр','Дуусах өдөр','Бүртгэсэн','Төлсөн','Статус'];
   const rows = allRegs.map(r => [
     r.name, r.age, r.phone, r.planLabel, r.amount,
-    r.startDate, fmtDate(r.createdAt), r.paidAt ? fmtDate(r.paidAt) : '',
+    r.startDate, r.endDate || '',
+    fmtDate(r.createdAt), r.paidAt ? fmtDate(r.paidAt) : '',
     r.status === 'paid' ? 'Төлсөн' : 'Хүлээгдэж буй'
   ]);
   const csv = [headers, ...rows].map(r => r.map(v => `"${v||''}"`).join(',')).join('\n');
